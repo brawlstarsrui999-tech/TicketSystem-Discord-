@@ -1,0 +1,103 @@
+# ============ TICKET SYSTEM ============
+
+def main_embed():
+    description = f"""\
+> Перед созданием персонажа ознакомтесь с - <#1466456914199314736>
+> Чтобы создать персонажа, нажмите на кнопку "Создать обращение"
+> Пока вами не будет написана хотя бы одна анкета, вы не будете допущены к РП.
+> Если вас просят переделать что-то в анкете или не принимают её, не нужно беситься, а просто спокойно слушайте указания.
+> Лимит количества активных персонажей - 3.
+> Если возникают вопросы или проблемы — @☀Yarilo☀.
+**Правила:** <:rules:1466470933349793997>
+- Запрещено оффтопить
+
+<:statistika:1466471687812943996> **Статистика**
+
+<:ticket:1466471976133595259> Тикеты за всё время: **{total_tickets}**
+<:ticket:1466471976133595259> Тикетов в ожидании: **{open_tickets}**
+"""
+
+    embed = discord.Embed(
+        title="<:anketa:1466471351757045963> Создание персонажа",
+        description=description,
+        color=ORANGE
+    )
+    return embed
+
+
+class CreateTicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(
+        label="Создать обращение",
+        style=discord.ButtonStyle.secondary,
+        emoji="<:new:1466474120043696243>"
+    )
+    async def create(self, interaction: discord.Interaction, button: discord.ui.Button):
+        global total_tickets, open_tickets
+
+        guild = interaction.guild
+        category = guild.get_channel(TICKET_CATEGORY_ID)
+
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(view_channel=False),
+            interaction.user: discord.PermissionOverwrite(view_channel=True, send_messages=True),
+            guild.get_role(STAFF_ROLE_ID): discord.PermissionOverwrite(view_channel=True)
+        }
+
+        total_tickets += 1
+        open_tickets += 1
+
+        channel = await guild.create_text_channel(
+            name=f"ticket-{total_tickets}",
+            category=category,
+            overwrites=overwrites
+        )
+
+        embed = discord.Embed(
+            title="<:ticket:1466471976133595259> Тикет создан",
+            description=(
+                "Напишите анкету!\n\n"
+                "<:verify:1466472424986906746> Ознакомьтесь с - <#1466456914199314736>"
+            ),
+            color=ORANGE
+        )
+
+        await channel.send(embed=embed, view=CloseTicketView())
+        await interaction.response.send_message(
+            embed=discord.Embed(
+                description=f"<:verify:1466472424986906746> Тикет создан: {channel.mention}",
+                color=ORANGE
+            ),
+            ephemeral=True
+        )
+
+        await update_main_message()
+
+
+class CloseTicketView(discord.ui.View):
+    def __init__(self):
+        super().__init__(timeout=None)
+
+    @discord.ui.button(label="Закрыть тикет", style=discord.ButtonStyle.danger)
+    async def close(self, interaction: discord.Interaction, button: discord.ui.Button):
+        global open_tickets
+
+        open_tickets -= 1
+
+        await interaction.channel.send(
+            embed=discord.Embed(
+                description="<:lock:1466473213826564284> Тикет закрыт. Канал будет удалён.",
+                color=ORANGE
+            )
+        )
+
+        await update_main_message()
+        await interaction.channel.delete()
+
+
+async def update_main_message():
+    if main_message:
+        await main_message.edit(embed=main_embed(), view=CreateTicketView())
+
